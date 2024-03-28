@@ -1,1 +1,1 @@
-# Pytorch-template
+# Auto-encoder for lip feature extraction

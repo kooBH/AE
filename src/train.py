@@ -6,8 +6,7 @@ import numpy as np
 
 from tensorboardX import SummaryWriter
 
-from model.Model import Model
-from Dataset import Dataset
+from DatasetLRS3 import DatasetLRS3
 
 from utils.hparams import HParam
 from utils.writer import MyWriter
@@ -19,8 +18,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', '-c', type=str, required=True,
                         help="yaml for configuration")
-    parser.add_argument('--default', type=str, default=None,
-                        help="default configuration")
+    parser.add_argument('--default', type=str, default=None)
     parser.add_argument('--version_name', '-v', type=str, required=True,
                         help="version of current training")
     parser.add_argument('--chkpt',type=str,required=False,default=None)
@@ -55,29 +53,27 @@ if __name__ == '__main__':
     os.makedirs(modelsave_path,exist_ok=True)
     os.makedirs(log_dir,exist_ok=True)
 
-    writer = MyWriter(hp, log_dir)
+    writer = MyWriter(log_dir)
 
     # TODO
-    train_dataset = Dataset(hp.data.root_train)
-    test_dataset= Dataset(hp.data.root_test)
+    train_dataset = DatasetLRS3(hp.data.root_train)
+    test_dataset= DatasetLRS3(hp.data.root_test)
 
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=batch_size,shuffle=False,num_workers=num_workers)
 
-    model = get_model(hp,device=device)
-    # or model = get_model(hp).to(device)
+    model = get_model(hp).to(device)
 
     if not args.chkpt == None : 
         print('NOTE::Loading pre-trained model : '+ args.chkpt)
         model.load_state_dict(torch.load(args.chkpt, map_location=device))
 
-    # TODO
     if hp.loss.type == "MSELoss":
         criterion = torch.nn.MSELoss()
     else :
         raise Exception("ERROR::Unsupported criterion : {}".format(hp.loss.type))
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=hp.train.adam)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=hp.train.AdamW)
 
     if hp.scheduler.type == 'Plateau': 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
@@ -105,17 +101,15 @@ if __name__ == '__main__':
         for i, (batch_data) in enumerate(train_loader):
             step +=1
             
-            # TODO
-
-            loss = run(batch_data,model,criterion)
+            loss = run(batch_data,model,criterion,hp)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             train_loss += loss.item()
            
-            print('TRAIN::{} : Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version,epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
 
             if step %  hp.train.summary_interval == 0:
+                print('TRAIN::{} : Epoch [{}/{}], Step [{}/{}], Loss: {:.8f}'.format(version,epoch+1, num_epochs, i+1, len(train_loader), loss.item()))
                 writer.log_value(loss,step,'train loss : '+hp.loss.type)
 
         train_loss = train_loss/len(train_loader)
@@ -126,20 +120,16 @@ if __name__ == '__main__':
         with torch.no_grad():
             test_loss =0.
             for j, (batch_data) in enumerate(test_loader):
-                loss = run(batch_data,model,criterion)
+                loss = run(batch_data,model,criterion,hp)
                 test_loss += loss.item()
 
-                print('TEST::{} :  Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(version, epoch+1, num_epochs, j+1, len(test_loader), loss.item()))
+                print('TEST::{} :  Epoch [{}/{}], Step [{}/{}], Loss: {:.8f}'.format(version, epoch+1, num_epochs, j+1, len(test_loader), loss.item()))
                 test_loss +=loss.item()
 
             test_loss = test_loss/len(test_loader)
             scheduler.step(test_loss)
             
-            writer.log_value(test_loss,step,'test los : ' + hp.loss.type)
-
-            # metric = evaluate(hp,model,list_eval,device=device)
-            # for m in hp.log.eval : 
-            #     writer.log_value(metric[m],step,m+"_VD")
+            writer.log_value(test_loss,step,'test loss : ' + hp.loss.type)
 
             if best_loss > test_loss:
                 torch.save(model.state_dict(), str(modelsave_path)+'/bestmodel.pt')

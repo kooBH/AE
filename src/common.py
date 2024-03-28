@@ -1,23 +1,26 @@
 import torch
 import torch.nn as nn
 from utils.metric import run_metric
+from models.ALVIT import FrameAutoEncoder
 
 
 def get_model(hp):
 
-    return
+    if hp.model.type == "ALVIT" :
+        model = FrameAutoEncoder(**hp.model.architecture)
+    else :
+        raise ValueError("Model type not found : {}".format(hp.model.type))
+
+    return model
 
 def run(data,model,criterion,hp,device="cuda:0",ret_output=False): 
-    input = data['input'].to(device)
-    target = data['target'].to(device)
-    output = model(input)
+    crop = data.to(device)
 
-    loss = criterion(output,target).to(device)
+    output = model(crop)
+
     if hp.loss.type == "MSELoss" : 
-        loss = criterion(output,target).to(device)
-    elif hp.loss.type == "wSDRLoss" : 
-        loss = criterion(estim,noisy,target, alpha=hp.loss.wSDRLoss.alpha)
-    
+        loss = criterion(output,crop).to(device)
+        loss /= crop.shape[0]
     if ret_output :
         return output, loss
     else : 

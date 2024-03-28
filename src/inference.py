@@ -1,73 +1,57 @@
 import torch
 import argparse
-import numpy as np
-import torchaudio
 import os
-import sys
 import glob
-from dataset.TestsetModel import TestsetModel
-from model.Model import Model
 from utils.hparams import HParam
-
-from tqdm import tqdm
+from tqdm.auto import tqdm
+from common import get_model
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     parser.add_argument('-c','--config',type=str,required=True)
-    parser.add_argument('-m','--model',type=str,default='./model_ckpt/bestmodel.pth')
-    parser.add_argument('-o','--output_dir',type=str,required=True)
+    parser.add_argument('--default', type=str, default=None)
+    parser.add_argument('--chkpt',type=str,required=False,default=None)
+    parser.add_argument('--device','-d',type=str,required=False,default="cuda:0")
+    parser.add_argument('-i','--dir_in',type=str,required=True)
+    parser.add_argument('-o','--dir_out',type=str,required=True)
     args = parser.parse_args()
 
     ## Parameters 
-    hp = HParam(args.config)
+    hp = HParam(args.config,args.default)
     print('NOTE::Loading configuration :: ' + args.config)
 
-    device = hp.gpu
+    device = args.device
     torch.cuda.set_device(device)
 
     num_epochs = 1
     batch_size = 1
-    test_model = args.model
-    win_len = hp.audio.frame
-
-    window=torch.hann_window(window_length=int(win_len), periodic=True, dtype=None, layout=torch.strided, device=None, requires_grad=False).to(device)
  
     ## dirs 
-    output_dir = args.output_dir
-    os.makedirs(output_dir,exist_ok=True)
+    dir_in = args.dir_in
+    dir_out = args.dir_out
+    os.makedirs(dir_out,exist_ok=True)
 
-    ## Dataset
-    # TODO ?
-    test_dataset = TestsetModel(hp.data.root,hp)
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,batch_size=1,shuffle=False,num_workers=1)
+    list_data = glob.glob(os.path.join(dir_in,"**","*.pt"), recursive=True)
 
     ## Model
-    # TODO
-    model = Model().to(device)
-
-    model.load_state_dict(torch.load(test_model,map_location=device))
+    model = get_model(hp).to(device)
+    model.load_state_dict(torch.load(args.chkpt, map_location=device))
     model.eval()
-    print('NOTE::Loading pre-trained model : ' + test_model)
-
+    print('NOTE::Loading pre-trained model : ' + args.chkpt)
 
     with torch.no_grad():
-        for i, (data,data_dir,data_name) in enumerate(tqdm(test_loader)):
-            # TODO
-            data_input = data.to(device)
-            data_output = model(data_input)
+        for path in tqdm(list_data) : 
+            dir_item = path.split("/")[-2]
+            name_item = (path.split("/")[-1]).split(".")[0]
 
-            auido = torch.istft(data_output,n_fft=hp.audio.frame, hop_length = hp.audio.shift, window=window,center =True, normalized=False,onesided=True,length=int(length)*hp.audio.shift)
-
-            audio = audio.to('cpu')
-
-            # TODO
-            ## Normalize
-            max_val = torch.max(torch.abs(audio_me_pe))
-            audio_me_pe = audio_me_pe/max_val
-
+            lip = torch.load(path)().to(device)
+            lip = torch.unsqueeze(lip,1)
+            feat = model.encode(lip)[0]
+            import pdb;pdb.set_trace()
+            
             ## Save
-            torchaudio.save(output_dir+'/'+str(data_dir[0])+'/'+str(data_name[0])+'.wav',src=audio,sample_rate=hp.audio.samplerate)
+            os.makedirs(os.path.join(dir_out,dir_item),exist_ok=True)
+            torch.save(feat.to("cpu") ,os.path.join(dir_out,dir_item,name_item+".pt"))
 
 
 

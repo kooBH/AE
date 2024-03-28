@@ -1,23 +1,26 @@
 model:
-  m1:
-    param1 : 1
+  type : "ALVIT"
+  architecture : {
+        "in_channels": 1,
+        "base_channels" : 8,
+        "num_layers" : 3
+  }
 ---
 train:
   epoch: 50
-  batch_size: 12
-  num_workers: 16
-  optimizer: 'adam'
-  adam: 0.0001
+  batch_size: 64
+  num_workers: 32
+  optimizer: 'AdamW'
+  Adam: 0.0001
+  AdamW: 0.0001
   adabound:
     initial: 0.001
     final: 0.05
   frame_num: 128
-  summary_interval: 10
-  validation_interval: 100
-  checkpoint_interval: 1000
+  summary_interval: 50
 ---
 loss:
-  type: 'MSE'
+  type: 'MSELoss'
   mwMSELoss : 
     alpha : 0.9
   wSDRLoss :
@@ -37,15 +40,9 @@ scheduler: # Plateau, oneCycle, CosineAnnealingLR
     eta_min : 0.000001
 ---
 data:
-  root_train : ""
-  root_test : ""
+  root_train : "/home/data/kbh/lip/LRS3/trainval"
+  root_test: "/home/data/kbh/lip/LRS3/test"
 ---
-  log:
-    root: '/home/nas/user/kbh/TODO'
-    plot_spec : False
----
-audio:
-  n_fft : 1024
-  n_hop : 256
-  sr : 16000
+log:
+  root: '/home/nas/user/kbh/AE_lip'
 

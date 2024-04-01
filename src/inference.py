@@ -46,8 +46,7 @@ if __name__ == '__main__':
 
             lip = torch.load(path)().to(device)
             lip = torch.unsqueeze(lip,1)
-            feat = model.encode(lip)[0]
-            import pdb;pdb.set_trace()
+            feat = model.encode(lip)
             
             ## Save
             os.makedirs(os.path.join(dir_out,dir_item),exist_ok=True)
